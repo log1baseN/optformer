@@ -12,6 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import sys
+import os
+project_root = "/Users/viralchitlangia/Downloads/optformer" # Must be specified (path to "/optformer")
+os.chdir(project_root)
+sys.path.append(os.getcwd()) # Fix Python Path
+
 import functools
 import numpy as np
 from optformer.decoding_regression import models
@@ -28,7 +34,10 @@ class ModelTest(parameterized.TestCase):
   @parameterized.parameters((None, None), (5, None), (None, 0.5), (3, 0.1))
   def test_e2e(self, top_k, top_p):
     # pylint: disable=invalid-name
-    encoder = tf.keras.models.Sequential([])
+    encoder = tf.keras.Sequential([
+    keras.layers.Dense(128, activation='relu'),
+    keras.layers.Dense(128),
+    ])
     vocab = vocabs.UnnormalizedVocab()
     decoder = models.AttentionDecoder(encoder, vocab)
 
@@ -39,8 +48,7 @@ class ModelTest(parameterized.TestCase):
     X = np.random.uniform(size=(num_data, feature_dim))
     weights = np.random.uniform(size=(feature_dim,))
     Y = np.sum(X * weights, axis=-1)
-    Y_token_ids = np.array([vocab.to_int(y) for y in Y])
-
+    Y_token_ids = np.array([vocab.to_int(y) for y in Y], dtype=np.int32)
     decoder.compile(
         keras.optimizers.Adam(learning_rate=1e-4),
         loss=functools.partial(

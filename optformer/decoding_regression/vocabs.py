@@ -235,3 +235,68 @@ class RepeatingVocab(FloatVocab):
 
     # Convert the voted tokens to a float using the base vocabulary.
     return self.base_vocab.from_int(voted_tokens.tolist())
+
+@attrs.define
+class PAdicVocab(FloatVocab):
+  """p-adic representation vocab, supports all real numbers via mixed encoding."""
+
+  base: int = attrs.field(default=5)
+  max_len: int = attrs.field(default=7)
+
+  @property
+  def size(self) -> int:
+    return self.base
+
+  @property
+  def token_length(self) -> int:
+    return self.max_len
+
+  def logit_mask(self, index: int):
+    del index
+    return np.ones(self.size, dtype=bool)
+
+  def to_int(self, f: float) -> list[int]:
+    tokens = []
+    if f == 0:
+      return [0] * self.max_len
+
+    if f > 0:
+      int_part = int(np.floor(f))
+      frac_part = f - int_part
+      tokens += self._encode_integer(int_part)
+      tokens += self._encode_fraction(frac_part)
+    else:
+      tokens = [self.base - 1] + self.to_int(-f)  # Add a negation token
+    return tokens[:self.max_len] + [0] * max(0, self.max_len - len(tokens))
+
+  def from_int(self, token_ids: list[int]) -> float:
+    if len(token_ids) == 0:
+      return 0.0
+
+    if token_ids[0] == self.base - 1:
+      return -self.from_int(token_ids[1:])
+
+    result = 0
+    mult = 1
+    for i, d in enumerate(token_ids):
+      if i == self.max_len // 2:
+        mult = 1.0 / self.base
+      result += d * mult
+      mult *= self.base if i < self.max_len // 2 else 1.0 / self.base
+    return result
+
+  def _encode_integer(self, n: int) -> list[int]:
+    digits = []
+    while n > 0:
+      digits.append(n % self.base)
+      n //= self.base
+    return digits or [0]
+
+  def _encode_fraction(self, frac: float) -> list[int]:
+    digits = []
+    for _ in range(self.max_len // 2):
+      frac *= self.base
+      digit = int(frac)
+      digits.append(digit)
+      frac -= digit
+    return digits

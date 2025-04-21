@@ -22,6 +22,7 @@ import attrs
 import jaxtyping as jt
 import numpy as np
 from optformer.common.serialization import numeric
+from fractions import Fraction
 
 NEG_INF = -1e7
 
@@ -300,3 +301,76 @@ class PAdicVocab(FloatVocab):
       digits.append(digit)
       frac -= digit
     return digits
+
+@attrs.define
+class SternBrocotVocab:
+    """Stern-Brocot tree vocab supporting all real rational numbers."""
+
+    max_len: int = attrs.field(default=7)  # includes 1 token for sign
+
+    @property
+    def size(self) -> int:
+        # 0: zero, 1: positive, 2: negative, 3: left, 4: right
+        return 5
+
+    @property
+    def token_length(self) -> int:
+        return self.max_len
+
+    def logit_mask(self, index: int):
+        del index
+        return np.ones(self.size, dtype=bool)
+
+    def to_int(self, f: float) -> list[int]:
+        if f == 0:
+            return [0] + [0] * (self.max_len - 1)  # 0 token + padding
+
+        sign_token = 1 if f > 0 else 2
+        path = self._encode_path(Fraction(abs(f)).limit_denominator())
+        path_tokens = [3 + p for p in path]  # left -> 3, right -> 4
+        padded = path_tokens[:self.max_len - 1] + [0] * max(0, self.max_len - 1 - len(path_tokens))
+        return [sign_token] + padded
+
+    def from_int(self, token_ids: list[int]) -> float:
+        if len(token_ids) == 0:
+            return 0.0
+
+        sign = 1 if token_ids[0] == 1 else -1
+        path = [t - 3 for t in token_ids[1:] if t in (3, 4)]
+        return sign * float(self._decode_path(path))
+
+    def _encode_path(self, frac: Fraction) -> list[int]:
+        """Return binary path: 0 for left, 1 for right"""
+        path = []
+        left = Fraction(0, 1)
+        right = Fraction(1_000_000_000, 1)  # ✅ Approximates ∞
+        current = Fraction(1, 1)
+
+        while frac != current and len(path) < self.max_len - 1:
+            if frac < current:
+                path.append(0)  # Go left
+                right = current
+                current = Fraction(left.numerator + current.numerator,
+                                   left.denominator + current.denominator)
+            else:
+                path.append(1)  # Go right
+                left = current
+                current = Fraction(right.numerator + current.numerator,
+                                   right.denominator + current.denominator)
+        return path
+
+    def _decode_path(self, path: list[int]) -> Fraction:
+        left = Fraction(0, 1)
+        right = Fraction(1_000_000_000, 1)  # ✅ Approximates ∞
+        current = Fraction(1, 1)
+
+        for step in path:
+            if step == 0:
+                right = current
+                current = Fraction(left.numerator + current.numerator,
+                                   left.denominator + current.denominator)
+            elif step == 1:
+                left = current
+                current = Fraction(right.numerator + current.numerator,
+                                   right.denominator + current.denominator)
+        return current

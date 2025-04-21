@@ -16,6 +16,11 @@
 
 import jaxtyping as jt
 import numpy as np
+import os
+import sys
+filepath = "../.."
+os.chdir(filepath)
+sys.path.append(os.getcwd())  # Fix Python Path
 from optformer.decoding_regression import vocabs
 import scipy as sp
 import tensorflow as tf
@@ -155,7 +160,7 @@ class AttentionDecoder(keras.Model):
 def weighted_sparse_categorical_crossentropy(labels, logits, weights=None):
   """Weighted version of sparse categorical cross entropy."""
 
-  ce = tf.nn.sparse_softmax_cross_entropy_with_logits(labels, logits)
+  ce = tf.nn.sparse_softmax_cross_entropy_with_logits(tf.cast(labels, tf.int32), logits)
   if weights is None:
     return ce
 

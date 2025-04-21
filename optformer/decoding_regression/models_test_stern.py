@@ -14,7 +14,7 @@
 
 import sys
 import os
-project_root = "../.." # Must be specified (path to "/optformer")
+project_root = "../.." # Must be specified (path to "/sgmcmc_ssm_code")
 os.chdir(project_root)
 sys.path.append(os.getcwd()) # Fix Python Path
 
@@ -38,7 +38,7 @@ class ModelTest(parameterized.TestCase):
     keras.layers.Dense(128, activation='relu'),
     keras.layers.Dense(128),
     ])
-    vocab = vocabs.UnnormalizedVocab()
+    vocab = vocabs.SternBrocotVocab()
     decoder = models.AttentionDecoder(encoder, vocab)
 
     num_data = 2000

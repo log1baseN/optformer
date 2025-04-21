@@ -14,7 +14,7 @@
 
 import sys
 import os
-project_root = "/Users/viralchitlangia/Downloads/optformer" # Must be specified (path to "/sgmcmc_ssm_code")
+project_root = "../.." # Must be specified (path to "/sgmcmc_ssm_code")
 os.chdir(project_root)
 sys.path.append(os.getcwd()) # Fix Python Path
 

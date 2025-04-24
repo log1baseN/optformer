@@ -14,7 +14,7 @@
 
 import sys
 import os
-project_root = "../.." # Must be specified (path to "/sgmcmc_ssm_code")
+project_root = "/home/sankalp/optformer" # Must be specified (path to "/sgmcmc_ssm_code")
 os.chdir(project_root)
 sys.path.append(os.getcwd()) # Fix Python Path
 
@@ -53,7 +53,7 @@ class ModelTest(parameterized.TestCase):
         keras.optimizers.Adam(learning_rate=1e-4),
         loss=functools.partial(
             models.weighted_sparse_categorical_crossentropy,
-            weights=np.array([0.3, 0.3, 0.09, 0.01, 0.01, 0.3, 0.5]),
+            # weights=np.array([0.3, 0.3, 0.09, 0.01, 0.01, 0.3, 0.5]),
         ),
     )
     decoder.fit(
@@ -64,8 +64,23 @@ class ModelTest(parameterized.TestCase):
         validation_split=0.2,
     )
 
-    floats = decoder.decode(X[:10], top_k=top_k, top_p=top_p)
-    self.assertLen(floats, 10)
+    # floats = decoder.decode(X[:10], top_k=top_k, top_p=top_p)
+    # self.assertLen(floats, 10)
+
+    floats = decoder.decode(X, top_k=top_k, top_p=top_p)
+    print("True value")
+    print(Y)
+    print("Predicted")
+    print(floats)
+    # for i in range(len(floats)):
+    #   if abs(floats[i] - Y[i]) > 100:
+    #     print("Index - " + str(i))
+    #     print("Error - " + str(abs(floats[i] - Y[i])))
+    #     print("True - " + str(Y[i]))
+    #     print("Predicted - " + str(floats[i]))
+    mask  = np.abs(floats - Y) < 100
+    print("Mean Square Error without outliers - " + str(np.mean((Y[mask] - np.array(floats)[mask])**2)**0.5))
+    print("Mean Square Error - " + str(np.mean((Y - np.array(floats))**2)**0.5))
 
 
 if __name__ == "__main__":

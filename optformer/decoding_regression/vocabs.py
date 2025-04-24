@@ -238,69 +238,102 @@ class RepeatingVocab(FloatVocab):
     return self.base_vocab.from_int(voted_tokens.tolist())
 
 @attrs.define
-class PAdicVocab(FloatVocab):
-  """p-adic representation vocab, supports all real numbers via mixed encoding."""
+class PAdicVocab:
+    """p-adic mixed integer-fraction tokenizer in base-p."""
+    base: int = attrs.field(default=5)
+    max_len: int = attrs.field(default=10)  # total tokens: first half integer, second half fractional
 
-  base: int = attrs.field(default=5)
-  max_len: int = attrs.field(default=7)
+    @property
+    def size(self) -> int:
+        return self.base
 
-  @property
-  def size(self) -> int:
-    return self.base
+    @property
+    def token_length(self) -> int:
+        return self.max_len
 
-  @property
-  def token_length(self) -> int:
-    return self.max_len
+    def logit_mask(self, index: int):
+        del index
+        return np.ones(self.size, dtype=bool)
 
-  def logit_mask(self, index: int):
-    del index
-    return np.ones(self.size, dtype=bool)
+    def to_int(self, f: float) -> list[int]:
+        """
+        Encode a real number f into a p-adic mixed integer/fraction token sequence.
+        First half: integer part, least-significant digit first;
+        Second half: fractional part, most-significant fraction digit first.
+        Handles negatives via p-adic complement.
+        """
+        # Handle zero
+        if f == 0:
+            return [0] * self.max_len
 
-  def to_int(self, f: float) -> list[int]:
-    tokens = []
-    if f == 0:
-      return [0] * self.max_len
+        # Determine sign
+        neg = f < 0
+        f = abs(f)
 
-    if f > 0:
-      int_part = int(np.floor(f))
-      frac_part = f - int_part
-      tokens += self._encode_integer(int_part)
-      tokens += self._encode_fraction(frac_part)
-    else:
-      tokens = [self.base - 1] + self.to_int(-f)  # Add a negation token
-    return tokens[:self.max_len] + [0] * max(0, self.max_len - len(tokens))
+        # Split integer and fractional parts
+        int_part = int(np.floor(f))
+        frac = f - int_part
 
-  def from_int(self, token_ids: list[int]) -> float:
-    if len(token_ids) == 0:
-      return 0.0
+        # Number of integer and fractional digits
+        half = self.max_len // 2
 
-    if token_ids[0] == self.base - 1:
-      return -self.from_int(token_ids[1:])
+        # Encode integer part (LSB first)
+        int_digits = []
+        for _ in range(half):
+            int_digits.append(int_part % self.base)
+            int_part //= self.base
 
-    result = 0
-    mult = 1
-    for i, d in enumerate(token_ids):
-      if i == self.max_len // 2:
-        mult = 1.0 / self.base
-      result += d * mult
-      mult *= self.base if i < self.max_len // 2 else 1.0 / self.base
-    return result
+        # Encode fractional part (MSB first)
+        frac_digits = []
+        for _ in range(self.max_len - half):
+            frac *= self.base
+            d = int(frac)
+            frac_digits.append(d)
+            frac -= d
 
-  def _encode_integer(self, n: int) -> list[int]:
-    digits = []
-    while n > 0:
-      digits.append(n % self.base)
-      n //= self.base
-    return digits or [0]
+        tokens = int_digits + frac_digits
 
-  def _encode_fraction(self, frac: float) -> list[int]:
-    digits = []
-    for _ in range(self.max_len // 2):
-      frac *= self.base
-      digit = int(frac)
-      digits.append(digit)
-      frac -= digit
-    return digits
+        # If negative, take p-adic complement of each digit
+        if neg:
+            tokens = [(self.base - 1) - d for d in tokens]
+        return tokens
+
+    def from_int(self, tokens) -> float:
+        """
+        Decode a p-adic mixed integer/fraction token sequence back to a Python float.
+        Detects negative by MSB of integer half and applies complement.
+        """
+        # Ensure tokens is a sequence and check length explicitly
+        if tokens is None or len(tokens) == 0:
+            return 0.0
+
+        # Convert numpy arrays to list if necessary
+        tokens = list(tokens)[: self.max_len]
+        half = self.max_len // 2
+        int_tokens = tokens[:half]
+        frac_tokens = tokens[half:]
+
+        # Detect negative if the most-significant integer digit > (p-1)/2
+        if int_tokens and int_tokens[-1] > (self.base - 1) // 2:
+            # apply complement to recover absolute digits
+            int_tokens = [(self.base - 1) - d for d in int_tokens]
+            frac_tokens = [(self.base - 1) - d for d in frac_tokens]
+            neg = True
+        else:
+            neg = False
+
+        # Reconstruct integer part
+        int_val = 0
+        for i, d in enumerate(int_tokens):
+            int_val += d * (self.base ** i)
+
+        # Reconstruct fractional part
+        frac_val = 0.0
+        for j, d in enumerate(frac_tokens, start=1):
+            frac_val += d * (self.base ** -j)
+
+        result = int_val + frac_val
+        return -result if neg else result
 
 @attrs.define
 class SternBrocotVocab:

@@ -23,6 +23,7 @@ import jaxtyping as jt
 import numpy as np
 from optformer.common.serialization import numeric
 from fractions import Fraction
+from typing import List, Sequence
 
 NEG_INF = -1e7
 
@@ -238,7 +239,7 @@ class RepeatingVocab(FloatVocab):
     return self.base_vocab.from_int(voted_tokens.tolist())
 
 @attrs.define
-class PAdicVocab:
+class PAdicVocab(FloatVocab):
     """p-adic mixed integer-fraction tokenizer in base-p."""
     base: int = attrs.field(default=5)
     max_len: int = attrs.field(default=10)  # total tokens: first half integer, second half fractional
@@ -336,10 +337,10 @@ class PAdicVocab:
         return -result if neg else result
 
 @attrs.define
-class SternBrocotVocab:
+class SternBrocotVocab(FloatVocab):
     """Stern-Brocot tree vocab supporting all real rational numbers."""
 
-    max_len: int = attrs.field(default=7)  # includes 1 token for sign
+    max_len: int = attrs.field(default=10)  # includes 1 token for sign
 
     @property
     def size(self) -> int:
@@ -354,56 +355,74 @@ class SternBrocotVocab:
         del index
         return np.ones(self.size, dtype=bool)
 
-    def to_int(self, f: float) -> list[int]:
+    def to_int(self, f: float) -> List[int]:
+        """
+        Encode a real number f into Stern-Brocot tokens:
+        [sign, direction...], padded with zero.
+        Sign: 0=zero, 1=positive, 2=negative.
+        Directions: 3=left, 4=right.
+        """
         if f == 0:
-            return [0] + [0] * (self.max_len - 1)  # 0 token + padding
+            return [0] + [0] * (self.max_len - 1)
 
-        sign_token = 1 if f > 0 else 2
-        path = self._encode_path(Fraction(abs(f)).limit_denominator())
-        path_tokens = [3 + p for p in path]  # left -> 3, right -> 4
-        padded = path_tokens[:self.max_len - 1] + [0] * max(0, self.max_len - 1 - len(path_tokens))
-        return [sign_token] + padded
+        frac = Fraction(f).limit_denominator()
+        sign_token = 1 if frac > 0 else 2
+        num, den = abs(frac.numerator), abs(frac.denominator)
 
-    def from_int(self, token_ids: list[int]) -> float:
-        if len(token_ids) == 0:
+        left_num, left_den = 0, 1
+        right_num, right_den = 1, 0
+        path_tokens: List[int] = []
+
+        # Build path until exact match or max length
+        while len(path_tokens) < self.max_len - 1:
+            med_num = left_num + right_num
+            med_den = left_den + right_den
+            cmp = num * med_den - med_num * den
+            if cmp == 0:
+                break
+            elif cmp < 0:
+                path_tokens.append(3)
+                right_num, right_den = med_num, med_den
+            else:
+                path_tokens.append(4)
+                left_num, left_den = med_num, med_den
+
+        padding = [0] * (self.max_len - 1 - len(path_tokens))
+        return [sign_token] + path_tokens + padding
+
+    def from_int(self, token_ids: Sequence[int]) -> float:
+        """
+        Decode Stern-Brocot tokens back to float.
+        Accepts any sequence (list, tuple, numpy array).
+        """
+        tokens = list(token_ids)
+        if len(tokens) == 0:
             return 0.0
 
-        sign = 1 if token_ids[0] == 1 else -1
-        path = [t - 3 for t in token_ids[1:] if t in (3, 4)]
-        return sign * float(self._decode_path(path))
+        sign_token = tokens[0]
+        if sign_token == 0:
+            return 0.0
+        elif sign_token == 1:
+            sign = 1
+        elif sign_token == 2:
+            sign = -1
+        else:
+            raise ValueError(f'Invalid sign token: {sign_token}')
+        # sign = 1 if sign_token == 1 else -1
 
-    def _encode_path(self, frac: Fraction) -> list[int]:
-        """Return binary path: 0 for left, 1 for right"""
-        path = []
-        left = Fraction(0, 1)
-        right = Fraction(1_000_000_000, 1)  # ✅ Approximates ∞
-        current = Fraction(1, 1)
+        left_num, left_den = 0, 1
+        right_num, right_den = 1, 0
 
-        while frac != current and len(path) < self.max_len - 1:
-            if frac < current:
-                path.append(0)  # Go left
-                right = current
-                current = Fraction(left.numerator + current.numerator,
-                                   left.denominator + current.denominator)
+        for t in tokens[1:]:
+            if t not in (3, 4):
+                break
+            med_num = left_num + right_num
+            med_den = left_den + right_den
+            if t == 3:
+                right_num, right_den = med_num, med_den
             else:
-                path.append(1)  # Go right
-                left = current
-                current = Fraction(right.numerator + current.numerator,
-                                   right.denominator + current.denominator)
-        return path
+                left_num, left_den = med_num, med_den
 
-    def _decode_path(self, path: list[int]) -> Fraction:
-        left = Fraction(0, 1)
-        right = Fraction(1_000_000_000, 1)  # ✅ Approximates ∞
-        current = Fraction(1, 1)
-
-        for step in path:
-            if step == 0:
-                right = current
-                current = Fraction(left.numerator + current.numerator,
-                                   left.denominator + current.denominator)
-            elif step == 1:
-                left = current
-                current = Fraction(right.numerator + current.numerator,
-                                   right.denominator + current.denominator)
-        return current
+        res_num = left_num + right_num
+        res_den = left_den + right_den
+        return float(res_num) / (res_den * float(sign))

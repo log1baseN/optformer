@@ -14,7 +14,12 @@
 
 import sys
 import os
-project_root = "/home/sankalp/optformer" # Must be specified (path to "/sgmcmc_ssm_code")
+
+current_dir = os.path.dirname(os.path.abspath(__file__))
+# Go up one level
+one_level_up = os.path.dirname(current_dir)
+# Go up another level
+project_root = os.path.dirname(one_level_up)
 os.chdir(project_root)
 sys.path.append(os.getcwd()) # Fix Python Path
 

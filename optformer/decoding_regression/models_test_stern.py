@@ -14,7 +14,12 @@
 
 import sys
 import os
-project_root = "/home/sankalp/optformer" # Must be specified (path to "/sgmcmc_ssm_code")
+
+current_dir = os.path.dirname(os.path.abspath(__file__))
+# Go up one level
+one_level_up = os.path.dirname(current_dir)
+# Go up another level
+project_root = os.path.dirname(one_level_up)
 os.chdir(project_root)
 sys.path.append(os.getcwd()) # Fix Python Path
 
@@ -25,6 +30,7 @@ from optformer.decoding_regression import vocabs
 import tensorflow as tf
 from absl.testing import absltest
 from absl.testing import parameterized
+import math
 
 keras = tf.keras
 
@@ -38,14 +44,18 @@ class ModelTest(parameterized.TestCase):
     keras.layers.Dense(128, activation='relu'),
     keras.layers.Dense(128),
     ])
-    vocab = vocabs.SternBrocotVocab()
-    decoder = models.AttentionDecoder(encoder, vocab)
 
     num_data = 2000
     feature_dim = 10
 
     # Generate 10D linear data.
     X = np.random.uniform(size=(num_data, feature_dim))
+
+    # Initialize the max_depth based on the maximum value in X
+    max_depth = math.ceil(X.max())
+    vocab = vocabs.SternBrocotVocab(max_len=max(10,max_depth+1))
+    decoder = models.AttentionDecoder(encoder, vocab)
+
     weights = np.random.uniform(size=(feature_dim,))
     Y = np.sum(X * weights, axis=-1)
     Y_token_ids = np.array([vocab.to_int(y) for y in Y], dtype=np.int32)
@@ -56,6 +66,7 @@ class ModelTest(parameterized.TestCase):
             # weights=np.array([0.3, 0.3, 0.09, 0.01, 0.01, 0.3, 0.5]),
         ),
     )
+
     decoder.fit(
         [X, Y_token_ids[:, :-1]],
         Y_token_ids,

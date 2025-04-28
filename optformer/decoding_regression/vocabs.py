@@ -366,7 +366,12 @@ class SternBrocotVocab(FloatVocab):
             return [0] + [0] * (self.max_len - 1)
 
         frac = Fraction(f).limit_denominator()
-        sign_token = 1 if frac > 0 else 2
+        if frac>0:
+            sign_token = 1
+        elif frac<0:
+            sign_token = 2
+        else:
+            sign_token = 0
         num, den = abs(frac.numerator), abs(frac.denominator)
 
         left_num, left_den = 0, 1
@@ -407,7 +412,8 @@ class SternBrocotVocab(FloatVocab):
         elif sign_token == 2:
             sign = -1
         else:
-            raise ValueError(f'Invalid sign token: {sign_token}')
+            sign = 1
+            # raise ValueError(f'Invalid sign token: {sign_token}')
         # sign = 1 if sign_token == 1 else -1
 
         left_num, left_den = 0, 1

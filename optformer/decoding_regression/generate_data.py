@@ -2,7 +2,7 @@ from uci_datasets import Dataset
 
 # run python -m pip install git+https://github.com/treforevans/uci_datasets.git
 
-def load_data():
+def load_data(dataset_name="challenger"):
     """
     Load the dataset.
     """
@@ -14,6 +14,6 @@ def load_data():
     # The dataset is loaded from the data directory
     # The dataset is split into training and testing sets
     # The training and testing sets are returned
-    data = Dataset("challenger")
-    x_train, y_train, x_test, y_test = data.get_split(split=0)
+    data = Dataset(dataset_name)
+    x_train, y_train, x_test, y_test = data.get_split(split=5)
     return x_train, y_train, x_test, y_test

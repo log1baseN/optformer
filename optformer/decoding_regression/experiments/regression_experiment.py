@@ -4,7 +4,7 @@ import os
 import sys
 import os
 
-dataset_name = "pol"  
+dataset_name = "gas"  
 
 # Create output directory if needed
 os.makedirs("outputs", exist_ok=True)

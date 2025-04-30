@@ -1,6 +1,22 @@
 import sys
 import os
 
+import sys
+import os
+
+dataset_name = "pol"  
+
+# Create output directory if needed
+os.makedirs("outputs", exist_ok=True)
+log_file_path = f"outputs/{dataset_name}_output.txt"
+
+# Redirect stdout to file
+log_file = open(log_file_path, "w")
+sys.stdout = log_file
+
+# Print the dataset name at the top
+print(f"Dataset: {dataset_name}\n{'='*40}\n")
+
 current_dir = os.path.dirname(os.path.abspath(__file__))
 # Go up one level
 one_level_up = os.path.dirname(current_dir)
@@ -44,7 +60,7 @@ class ModelTest(parameterized.TestCase):
         dropout=0.1,          # dropout rate
     )
 
-    X_train , Y_train, X_test, Y_test = generate_data.load_data("airfoil")
+    X_train , Y_train, X_test, Y_test = generate_data.load_data(dataset_name)
     y_min = min(np.min(Y_train),np.min(Y_test))
     y_max = max(np.max(Y_train),np.max(Y_test))
     # Y_train = (Y_train - y_min) / (y_max - y_min)
@@ -77,10 +93,18 @@ class ModelTest(parameterized.TestCase):
     print(Y_test[:10])
     print("Predicted")
     print(floats[:10])
-    mse = np.mean(Y_test - np.array(floats))**2
+    mse = np.mean((Y_test - np.array(floats))**2)
     print("Mean Square Error - " + str(mse))
     var = np.var(Y_test)
-    print("Relative Mean Square Error - " + str(mse/var))
+    if var > 0:
+        print("Relative Mean Square Error - " + str(mse/var))
+
+    
+    # Continuous Negative Log‑Likelihood (Gaussian)
+    sigma2 = np.var(Y_train)  # use variance of training targets as σ²
+    nll = 0.5 * np.log(2 * np.pi * sigma2) + ((Y_test - np.array(floats))**2) / (2 * sigma2)
+    nll_mean = np.mean(nll)
+    print("Gaussian Negative Log-Likelihood - " + str(nll_mean))
 
     score = decoder.evaluate(
         [X_test, Y_test_token_ids[:, :-1]],
@@ -92,4 +116,5 @@ class ModelTest(parameterized.TestCase):
 
 
 if __name__ == "__main__":
-  absltest.main()
+    absltest.main()
+    log_file.close()

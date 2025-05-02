@@ -12,7 +12,6 @@ sys.path.append(os.getcwd()) # Fix Python Path
 import numpy as np
 import pandas as pd
 import tensorflow as tf
-import math
 from optformer.decoding_regression import models
 from optformer.decoding_regression import vocabs
 from absl.testing import absltest
@@ -88,11 +87,14 @@ class ShapeDataset(tf.data.Dataset):
 #         train(shape='zigzag')
     
 def train(shape = 'zigzag',top_k=None, top_p=None):
-    pts = SHAPES[shape](n=3000, noise=0.01)
-    vocab = vocabs.UnnormalizedVocab()
+    shape_name = shape
+    tokenizer = "stern_brocot"
+    pts = SHAPES[shape](n=5000, noise=0.05)
+    pts = np.random.permutation(pts)
+    vocab = vocabs.SternBrocotVocab()
     encoder = tf.keras.Sequential([
         keras.layers.Dense(256, activation='relu'),
-        # keras.layers.Dense(128, activation='relu'),
+        # keras.layers.Dense(256, activation='relu'),
         keras.layers.Dense(256),
     ])
     decoder = models.AttentionDecoder(
@@ -114,7 +116,7 @@ def train(shape = 'zigzag',top_k=None, top_p=None):
         keras.optimizers.Adam(learning_rate=1e-4),
         loss=functools.partial(
             models.weighted_sparse_categorical_crossentropy,
-            weights=np.array([0.3, 0.3, 0.09, 0.01, 0.01, 0.3, 0.5]),
+            # weights=np.array([0.3, 0.3, 0.09, 0.01, 0.01, 0.3, 0.5]),
         ),
     )
     decoder.fit(
@@ -126,7 +128,7 @@ def train(shape = 'zigzag',top_k=None, top_p=None):
     )
 
     # Sampling from the learned density: generate multiple y samples for given x
-    x_test = np.linspace(X.min(), X.max(), 3000).astype(float)
+    x_test = np.random.uniform(X.min(), X.max(), size=5000).astype(float)
     sampled_y = decoder.decode(x_test, top_k=top_k, top_p=top_p)  # returns float predictions
 
     points = []
@@ -143,26 +145,18 @@ def train(shape = 'zigzag',top_k=None, top_p=None):
         "x": X.ravel(),
         "y": Y
     })
-    ground_truth_df.to_csv("/home/sankalp/optformer/optformer/decoding_regression/data/ground_truth.csv", index=False)
+    ground_truth_df.to_csv(f"/home/sankalp/optformer/optformer/decoding_regression/data/ground_truth_{tokenizer}_{shape_name}.csv", index=False)
 
     # Sampled points
     predicted_df = pd.DataFrame({
         "x": points[:,0],
         "y": points[:,1]
     })
-    predicted_df.to_csv("/home/sankalp/optformer/optformer/decoding_regression/data/predicted.csv", index=False)
+    predicted_df.to_csv(f"/home/sankalp/optformer/optformer/decoding_regression/data/predicted_{tokenizer}_{shape_name}.csv", index=False)
 
 
-
-# class ModelTest(parameterized.TestCase):
-
-#   @parameterized.parameters((None, None), (5, None), (None, 0.5), (3, 0.1))
-#   def test_e2e(self, top_k, top_p):
-#     train(shape='zigzag',top_k = top_k,top_p = top_p)
-
-
-# if __name__ == "__main__":
-#     absltest.main()
-
+train(shape='half_moons',top_k = None,top_p = None)
+train(shape='zigzag',top_k = None,top_p = None)
 train(shape='spiral',top_k = None,top_p = None)
+train(shape='hollow_square',top_k = None,top_p = None)
 
